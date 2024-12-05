@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                        Int                @id @default(autoincrement())
+  name                      String
+  email                     String             @unique
+  phone                     String?
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @default(now()) @updatedAt
+  password                  String
+  role                      UserRole           @default(USER)
+  assets                    Asset[]
+  approvals                 ChangeApproval[]
+  incidentComments          IncidentComment[]
+  requestComments           RequestComment[]
+  assignedIncidents         Incident[]         @relation("AssignedIncidents")
+  incidents                 Incident[]
+  knowledgeArticlesCreated  KnowledgeArticle[] @relation("CreatedArticles")
+  knowledgeArticlesModified KnowledgeArticle[] @relation("ModifiedArticles")
+  asignedRequests           Request[]          @relation("AssigneeRequests")
+  requests                  Request[]          @relation("RequesterRequests")
+}
+
+model Incident {
+  id          Int              @id @default(autoincrement())
+  title       String
+  description String
+  status      IncidentStatus   @default(NEW)
+  priority    IncidentPriority
+  reporterId  Int
+  assigneeId  Int?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+  resolvedAt  DateTime?
+  assetId     Int?
+  comments    IncidentComment[]
+  asset       Asset?           @relation(fields: [assetId], references: [id])
+  assignee    User?            @relation("AssignedIncidents", fields: [assigneeId], references: [id])
+  reporter    User             @relation(fields: [reporterId], references: [id])
+  categories  Category[]       @relation("IncidentCategories")
+
+  @@index([reporterId])
+  @@index([assigneeId])
+}
+
+model IncidentComment {
+  id         Int       @id @default(autoincrement())
+  content    String
+  incidentId Int
+  userId     Int
+  createdAt  DateTime  @default(now())
+  incident   Incident  @relation(fields: [incidentId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@index([incidentId])
+  @@index([userId])
+}
+
+model RequestComment {
+  id         Int       @id @default(autoincrement())
+  content    String
+  requestId  Int
+  userId     Int
+  createdAt  DateTime  @default(now())
+  request    Request   @relation(fields: [requestId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+
+  @@index([requestId])
+  @@index([userId])
+}
+
+model Request {
+  id             Int              @id @default(autoincrement())
+  title          String
+  description    String
+  status         RequestStatus    @default(PENDING)
+  requestorId    Int
+  assigneeId     Int?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  plannedForDate DateTime?
+  resolvedAt     DateTime?
+  approvers      ChangeApproval[]
+  assignee       User?            @relation("AssigneeRequests", fields: [assigneeId], references: [id])
+  requestor      User             @relation("RequesterRequests", fields: [requestorId], references: [id])
+  comments       RequestComment[] 
+  categories     Category[]       @relation("RequestCategories")
+
+  @@index([requestorId])
+  @@index([assigneeId])
+}
+
+model ChangeApproval {
+  id              Int            @id @default(autoincrement())
+  changeRequestId Int
+  approverId      Int
+  status          ApprovalStatus @default(PENDING)
+  approvedAt      DateTime?
+  approver        User           @relation(fields: [approverId], references: [id])
+  request         Request        @relation(fields: [changeRequestId], references: [id])
+
+  @@index([changeRequestId])
+  @@index([approverId])
+}
+
+model Asset {
+  id                Int            @id @default(autoincrement())
+  name              String
+  description       String
+  type              AssetType
+  status            AssetStatus    @default(ACTIVE)
+  ownerId           Int?
+  purchasedAt       DateTime
+  warrantyExpiresAt DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @default(now()) @updatedAt
+  owner             User?          @relation(fields: [ownerId], references: [id])
+  articles          AssetArticle[] @relation("ArticleAssets")
+  incidents         Incident[]
+  categories        Category[]     @relation("AssetCategories")
+}
+
+model KnowledgeArticle {
+  id               Int            @id @default(autoincrement())
+  title            String
+  docUrl           String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @default(now()) @updatedAt
+  createdById      Int
+  lastModifiedById Int?
+  isPublished      Boolean        @default(true)
+  assets           AssetArticle[] @relation("ArticleAssets")
+  createdBy        User           @relation("CreatedArticles", fields: [createdById], references: [id])
+  lastModifiedBy   User?          @relation("ModifiedArticles", fields: [lastModifiedById], references: [id])
+  categories       Category[]     @relation("KnowledgeArticleCategories")
+}
+
+model Category {
+  id                Int                @id @default(autoincrement())
+  name              String
+  assets            Asset[]            @relation("AssetCategories")
+  incidents         Incident[]         @relation("IncidentCategories")
+  knowledgeArticles KnowledgeArticle[] @relation("KnowledgeArticleCategories")
+  requests          Request[]          @relation("RequestCategories")
+
+  @@index([name])
+}
+
+model AssetArticle {
+  id        Int              @id @default(autoincrement())
+  assetId   Int
+  articleId Int
+  article   KnowledgeArticle @relation("ArticleAssets", fields: [articleId], references: [id])
+  asset     Asset            @relation("ArticleAssets", fields: [assetId], references: [id])
+}
+
+enum RequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum UserRole {
+  ADMIN
+  USER
+  SUPPORT
+  MANAGER
+}
+
+enum IncidentStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  ON_HOLD
+}
+
+enum IncidentPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AssetType {
+  HARDWARE
+  SOFTWARE
+  LICENSE
+  OTHER
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  DECOMMISSIONED
+}
